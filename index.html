@@ -4,155 +4,207 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>神经</title>
+<script>
+  // 与宿主同源：读同一份 localStorage 主题；storage 事件让宿主切主题时本页同步。
+  (function () {
+    function apply(v) {
+      if (v !== 'dark' && v !== 'light') v = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+      document.documentElement.dataset.theme = v
+    }
+    var t = null
+    try { t = localStorage.getItem('floria-theme') } catch (e) { /* 存储不可用则跟随系统 */ }
+    apply(t)
+    addEventListener('storage', function (e) {
+      if (e.key !== 'floria-theme') return
+      apply(e.newValue)
+    })
+  })()
+</script>
+<link rel="stylesheet" href="/webui/floria-web.css?v=2">
+<script src="/webui/floria-web.iife.js?v=2"></script>
 <style>
-  :root { color-scheme: light dark;
-    --bg:#fff; --fg:#1c1e21; --fg2:#6b7280; --fg3:#9aa1ab; --bd:#e5e7eb; --hov:#f5f6f8; --card:#fff; --act:#f0f1f3; }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg:#161616; --fg:#e8eaed; --fg2:#a0a4ab; --fg3:#787d86; --bd:#2c2c2c; --hov:#1f1f1f; --card:#1c1c1c; --act:#242424; }
-  }
-  * { box-sizing: border-box; }
-  html, body { margin:0; height:100%; }
-  body { background:var(--bg); color:var(--fg); font:14px/1.6 system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; }
-  .pane { height:100%; display:flex; flex-direction:column; padding:20px 22px 14px; }
-  .pane.scroll { overflow:auto; }
-  .head h1 { font-size:24px; font-weight:700; letter-spacing:-.3px; margin:0; }
-  .head .sub { font-size:13px; color:var(--fg2); margin-top:2px; }
-  .grid { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:12px; margin-top:18px; }
-  @media (max-width:640px){ .grid { grid-template-columns:1fr; } }
-  .card { display:flex; gap:12px; align-items:flex-start; padding:14px; background:var(--card); border:1px solid var(--bd); border-radius:12px; cursor:pointer; color:inherit; text-align:left; font:inherit; transition:border-color .15s, background .15s; }
-  .card:hover { background:var(--hov); }
-  .ic { width:48px; height:48px; border-radius:10px; display:flex; align-items:center; justify-content:center; color:#fff; flex:none; }
-  .ic svg { width:22px; height:22px; }
-  .meta { flex:1; min-width:0; }
-  .name { font-size:15px; font-weight:600; display:flex; align-items:center; gap:6px; }
-  .badge { font-size:11px; font-weight:500; color:var(--fg2); background:var(--act); border-radius:999px; padding:1px 8px; flex:none; }
-  .desc { font-size:12px; color:var(--fg2); margin-top:3px; line-height:1.5; }
-  .stats { display:flex; flex-wrap:wrap; gap:5px; margin-top:7px; }
-  .stats span { background:var(--act); color:var(--fg2); border-radius:999px; padding:2px 8px; font-size:11.5px; }
-  .empty { padding:42px 0; text-align:center; color:var(--fg3); font-size:13px; grid-column:1/-1; }
-  .foot { margin-top:22px; text-align:center; font-size:12px; color:var(--fg3); flex:none; }
-  .ghead { display:flex; align-items:center; gap:10px; flex:none; margin-bottom:12px; }
-  .back { flex:none; padding:6px 14px; border-radius:999px; font-size:13px; background:var(--act); color:var(--fg2); border:0; cursor:pointer; font:inherit; }
-  .back:hover { background:var(--hov); color:var(--fg); }
-  .title { font-size:16px; font-weight:700; }
-  .chip { background:var(--act); color:var(--fg2); border-radius:999px; padding:2px 9px; font-size:11.5px; }
-  .legend { margin-left:auto; display:flex; align-items:center; gap:6px; font-size:12px; color:var(--fg2); }
-  .legend i { display:inline-block; border-radius:50%; }
-  .lg-mem { width:8px; height:8px; background:#9aa7b8; }
-  .lg-cog { width:12px; height:12px; background:#5b8ff9; }
-  .lg-comm { width:15px; height:15px; background:#7b6bd6; }
-  @media (max-width:720px){ .legend { display:none; } }
-  .graph { position:relative; flex:1; min-height:0; background:var(--card); border:1px solid var(--bd); border-radius:12px; overflow:hidden; }
-  canvas { position:absolute; inset:0; touch-action:none; cursor:grab; }
-  canvas:active { cursor:grabbing; }
-  .hint { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; color:var(--fg2); font-size:13px; text-align:center; padding:0 20px; }
-  .note { position:absolute; top:10px; left:10px; right:10px; z-index:3; pointer-events:none; background:var(--act); color:var(--fg2); border:1px solid var(--bd); border-radius:8px; padding:6px 10px; font-size:12px; line-height:1.5; }
-  .pop { position:absolute; z-index:6; width:300px; background:var(--bg); border:1px solid var(--bd); border-radius:12px; box-shadow:0 10px 32px rgba(20,30,60,.16); padding:11px 12px 10px; font-size:12.5px; pointer-events:none; }
-  .pop-h { display:flex; align-items:center; gap:7px; font-size:13px; font-weight:600; }
-  .dot { width:9px; height:9px; border-radius:50%; flex:none; }
-  .chips { display:flex; flex-wrap:wrap; gap:5px; margin-top:8px; }
-  .chips span { background:var(--act); color:var(--fg2); border-radius:999px; padding:2px 8px; font-size:11.5px; }
-  .members { pointer-events:auto; margin-top:9px; border-top:1px solid var(--bd); padding-top:8px; max-height:190px; overflow:auto; display:flex; flex-direction:column; gap:5px; }
-  .mrow { display:flex; align-items:center; gap:6px; }
-  .role { width:8px; height:8px; border-radius:50%; flex:none; background:var(--hue, #8a94a6); }
-  .role.context { background:transparent; border:1.5px solid var(--hue, #8a94a6); }
-  .mq { flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .score { flex:none; font-size:11px; color:var(--fg3); font-variant-numeric:tabular-nums; }
-  .q { margin-top:8px; line-height:1.5; max-height:90px; overflow:auto; overflow-wrap:anywhere; }
-  .kws { display:flex; flex-wrap:wrap; gap:5px; margin-top:8px; }
-  .kw { border:1px solid var(--bd); border-radius:999px; padding:1px 8px; font-size:11px; color:var(--fg2); }
-  .prev { margin-top:8px; color:var(--fg2); line-height:1.55; overflow-wrap:anywhere; display:-webkit-box; -webkit-line-clamp:5; -webkit-box-orient:vertical; overflow:hidden; }
+  html, body { margin: 0; }
+  html { background: var(--bg); height: 100%; }
+  body { background: var(--bg); color: var(--text); font: 14px/1.6 system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; padding: 20px 22px 34px; min-height: 100%; overflow-x: clip; -webkit-overflow-scrolling: touch; }
+  /* 卡内独立文档：补一条按钮 reset（floria-web.css 只出令牌与结构，按钮外观由业务类给） */
+  button { border: 0; background: none; padding: 0; font: inherit; color: inherit; cursor: pointer; }
+
+  /* 详情页内的节点图区 */
+  .neuron-sec { margin-top: 6px; }
+  .neuron-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 12px; }
+  .neuron-bar .tip { font-size: 12px; color: var(--text-3); margin-left: auto; }
+  .legend { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-2); }
+  .legend i { display: inline-block; border-radius: 50%; }
+  .lg-mem { width: 8px; height: 8px; background: #9aa7b8; }
+  .lg-cog { width: 12px; height: 12px; background: #5b8ff9; }
+  .lg-comm { width: 15px; height: 15px; background: #7b6bd6; }
+  @media (max-width: 720px) { .neuron-bar .tip { display: none; } }
+
+  .graph { position: relative; height: calc(100vh - 300px); min-height: 420px; background: var(--bg); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+  canvas { position: absolute; inset: 0; touch-action: none; cursor: grab; }
+  canvas:active { cursor: grabbing; }
+  .hint { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-2); font-size: 13px; text-align: center; padding: 0 20px; }
+  .note { position: absolute; top: 10px; left: 10px; right: 10px; z-index: 3; pointer-events: none; background: var(--active); color: var(--text-2); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; font-size: 12px; line-height: 1.5; }
+  .pop { position: absolute; z-index: 6; width: 300px; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); padding: 11px 12px 10px; font-size: 12.5px; pointer-events: none; }
+  .pop-h { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+  .chips span { background: var(--active); color: var(--text-2); border-radius: 999px; padding: 2px 8px; font-size: 11.5px; }
+  .members { pointer-events: auto; margin-top: 9px; border-top: 1px solid var(--border); padding-top: 8px; max-height: 190px; overflow: auto; display: flex; flex-direction: column; gap: 5px; }
+  .mrow { display: flex; align-items: center; gap: 6px; }
+  .role { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--hue, #8a94a6); }
+  .role.context { background: transparent; border: 1.5px solid var(--hue, #8a94a6); }
+  .mq { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .score { flex: none; font-size: 11px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+  .q { margin-top: 8px; line-height: 1.5; max-height: 90px; overflow: auto; overflow-wrap: anywhere; }
+  .kws { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+  .kw { border: 1px solid var(--border); border-radius: 999px; padding: 1px 8px; font-size: 11px; color: var(--text-2); }
+  .prev { margin-top: 8px; color: var(--text-2); line-height: 1.55; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; }
 </style>
 </head>
 <body>
-  <div class="pane scroll" id="picker">
-    <div class="head">
-      <h1>神经元</h1>
-      <div class="sub">记忆神经元库 · mem→认知→社群三级节点图（数据源 .claude/neturon/neurons）</div>
-    </div>
-    <div class="grid" id="grid"></div>
-    <div class="foot">数据源：网关 /gateway/neurons 实时扫描</div>
-  </div>
-  <div class="pane" id="view" hidden>
-    <div class="ghead">
-      <button class="back" id="back">‹ 神经元</button>
-      <span class="title" id="vtitle"></span>
-      <span id="vchips" style="display:flex;gap:6px"></span>
-      <span class="legend"><i class="lg-mem"></i>记忆<i class="lg-cog"></i>认知<i class="lg-comm"></i>社群</span>
-    </div>
-    <div class="graph" id="graph"><canvas id="canvas"></canvas><div class="pop" id="pop" hidden></div></div>
-    <div class="foot">滚轮缩放 · 空白处拖拽平移 · 节点可拖拽 · 悬停/点击弹浮窗 · 数据源 /gateway/neurons/graph</div>
-  </div>
+  <div id="app"><div class="mgr-empty" style="padding:48px 0">加载中…</div></div>
 <script>
+  const { mgr: MgrUI, I, esc } = window.FloriaWeb
   const TOKEN = new URLSearchParams(location.search).get('token') || ''
   const PALETTE = ['#5b8ff9', '#61a1c2', '#7b6bd6', '#5aa57a', '#d98a4a', '#c96a6a', '#4aa3a0', '#a06ba8', '#6b8f71', '#b48a5a']
   const BRAIN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 4.5a2.5 2.5 0 0 0-2.5 2.5 2.5 2.5 0 0 0-1.8 4.2A2.6 2.6 0 0 0 6 15.6 2.5 2.5 0 0 0 8.5 18h1V4.5z"/><path d="M14.5 4.5A2.5 2.5 0 0 1 17 7a2.5 2.5 0 0 1 1.8 4.2 2.6 2.6 0 0 1-.8 4.4A2.5 2.5 0 0 1 15.5 18h-1V4.5z"/><path d="M12 4.5v13.5M12 18v1.5"/></svg>'
   function api(p) { return p + (TOKEN ? (p.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(TOKEN) : '') }
-  function color(n) { let h = 0; for (const c of String(n)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return PALETTE[h % PALETTE.length] }
-  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
   function $(id) { return document.getElementById(id) }
+  const THEME_DARK = () => document.documentElement.dataset.theme === 'dark'
 
-  // ---------- 层级1：库选择 ----------
-  let NEU = [], NEU_ERR = ''
+  /* ---------- 层级1：库选择 ---------- */
+  let NEU = [], NEU_ERR = '', LOADING = true
+  let GRID_Q = ''
+  let VIEW = null // { mode:'detail', id }
+  let GRAPH = null
+
   async function loadList() {
+    LOADING = true; NEU_ERR = ''
+    renderGrid()
     try {
       const r = await fetch(api('/gateway/neurons'))
       if (!r.ok) throw new Error('HTTP ' + r.status)
       const d = await r.json()
       NEU = Array.isArray(d.neurons) ? d.neurons : []
-      renderGrid()
     } catch (e) {
       NEU_ERR = e.message || String(e)
-      renderGrid()
+    } finally {
+      LOADING = false
+      if (!VIEW) renderGrid()
     }
   }
-  function renderGrid() {
-    const g = $('grid')
-    if (NEU_ERR) { g.innerHTML = '<div class="empty">清单加载失败：' + esc(NEU_ERR) + '</div>'; return }
-    g.innerHTML = NEU.length
-      ? NEU.map(cardHtml).join('')
-      : '<div class="empty">未发现神经元库（各根 .claude/neturon/neurons/ 下含 config.yaml + l2.mem/mem.db 的目录即注册）</div>'
-    g.querySelectorAll('.card').forEach((c) => c.addEventListener('click', () => openGraph(c.dataset.id)))
+
+  function brainSvg(id) {
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="color:' + MgrUI.color(id) + '">' +
+      '<path d="M9.5 4.5a2.5 2.5 0 0 0-2.5 2.5 2.5 2.5 0 0 0-1.8 4.2A2.6 2.6 0 0 0 6 15.6 2.5 2.5 0 0 0 8.5 18h1V4.5z"/>' +
+      '<path d="M14.5 4.5A2.5 2.5 0 0 1 17 7a2.5 2.5 0 0 1 1.8 4.2 2.6 2.6 0 0 1-.8 4.4A2.5 2.5 0 0 1 15.5 18h-1V4.5z"/>' +
+      '<path d="M12 4.5v13.5M12 18v1.5"/></svg>'
   }
-  function cardHtml(n) {
-    return '<button class="card" data-id="' + esc(n.id) + '" title="进入 ' + esc(n.name || n.id) + ' 节点图">' +
-      '<span class="ic" style="background:' + color(n.id) + '">' + BRAIN + '</span>' +
-      '<span class="meta"><span class="name">' + esc(n.name || n.id) + '<span class="badge">' + esc(n.id) + '</span></span>' +
-      '<span class="desc">' + esc(n.description || '（无触发说明）') + '</span>' +
-      '<span class="stats"><span>记忆 ' + n.mem_count + '</span><span>认知 ' + n.cog_count + '</span><span>社群 ' + n.community_count + '</span>' +
-      (n.last_updated ? '<span>更新 ' + esc(String(n.last_updated).slice(0, 10)) + '</span>' : '') + '</span></span></button>'
+  function statsOf(n) {
+    return n.mem_count + ' 记忆 · ' + n.cog_count + ' 认知 · ' + n.community_count + ' 社群'
+  }
+  function neuronItem(n) {
+    return {
+      key: n.id,
+      name: n.name || n.id,
+      desc: statsOf(n) + (n.last_updated ? ' · 更新 ' + String(n.last_updated).slice(0, 10) : ''),
+      icon: brainSvg(n.id),
+      color: MgrUI.color(n.id),
+      initial: String(n.name || n.id)[0].toUpperCase(),
+    }
+  }
+  function browseItems() {
+    const q = String(GRID_Q || '').trim().toLowerCase()
+    return NEU
+      .filter((n) => !q || String(n.name || '').toLowerCase().includes(q) || String(n.id).toLowerCase().includes(q) || String(n.description || '').toLowerCase().includes(q))
+      .map(neuronItem)
   }
 
-  // ---------- 层级2：图 ----------
-  let VIEW = null
-  async function openGraph(id) {
-    $('picker').hidden = true
-    $('view').hidden = false
-    const meta = NEU.find((n) => n.id === id)
-    $('vtitle').textContent = (meta && (meta.name || meta.id)) || id
-    $('vchips').innerHTML = meta
-      ? '<span class="chip">记忆 ' + meta.mem_count + '</span><span class="chip">认知 ' + meta.cog_count + '</span><span class="chip">社群 ' + meta.community_count + '</span>'
-      : ''
-    if (VIEW) { if (VIEW.ro) VIEW.ro.disconnect(); if (VIEW.raf) cancelAnimationFrame(VIEW.raf); VIEW = null }
-    const box = $('graph')
-    box.innerHTML = '<canvas id="canvas"></canvas><div class="pop" id="pop" hidden></div>'
-    box.insertAdjacentHTML('afterbegin', '<div class="hint">加载图数据…</div>')
+  function renderGrid() {
+    MgrUI.browse($('app'), {
+      title: '神经',
+      sub: '记忆神经元库 · mem → 认知 → 社群三级节点图',
+      search: { placeholder: '搜索神经元库…', value: GRID_Q },
+      actionsHtml: '<button class="mgr-act" data-act="refresh" title="刷新">' + I.refresh + '</button>',
+      items: LOADING ? [] : browseItems(),
+      empty: LOADING ? '加载中…' : '没有匹配的神经元库',
+      error: NEU_ERR || undefined,
+      onRetry: loadList,
+      onSearch(q) {
+        GRID_Q = q
+        MgrUI.grid($('app'), { items: browseItems(), empty: '没有匹配的神经元库', onItem: openGraph })
+      },
+      onItem(id) { openGraph(id) },
+    })
+  }
+
+  /* ---------- 层级2：详情 + 节点图 ---------- */
+  function renderDetail() {
+    const n = NEU.find((x) => x.id === VIEW.id)
+    if (!n) { backToGrid(); return }
+    MgrUI.detail($('app'), {
+      typeLabel: '神经元',
+      name: n.name || n.id,
+      sub: statsOf(n) + (n.last_updated ? ' · 更新 ' + String(n.last_updated).slice(0, 10) : ''),
+      icon: brainSvg(n.id),
+      color: MgrUI.color(n.id),
+      onBack() { backToGrid() },
+      onMounted(host) {
+        const d = host.querySelector('.mgr-dl-desc')
+        if (d) d.remove()
+        const sec = host.querySelector('.mgr-dl-sec')
+        if (sec) sec.remove()
+        mountGraphSection(host, n)
+      },
+    })
+    window.scrollTo(0, 0)
+  }
+
+  function mountGraphSection(host, n) {
+    const pane = host.querySelector('.mgr-pane')
+    if (!pane) return
+    const sec = document.createElement('div')
+    sec.className = 'neuron-sec'
+    sec.innerHTML =
+      '<div class="neuron-bar">' +
+        '<span class="legend"><i class="lg-mem"></i>记忆<i class="lg-cog"></i>认知<i class="lg-comm"></i>社群</span>' +
+        '<span class="tip">滚轮缩放 · 拖拽平移 · 点击节点看详情</span>' +
+      '</div>' +
+      '<div class="graph" data-graph><div class="hint" data-hint>加载图数据…</div></div>'
+    pane.appendChild(sec)
+    loadGraph(n.id, sec)
+  }
+
+  async function loadGraph(id, sec) {
+    const hint = sec.querySelector('[data-hint]')
     try {
       const r = await fetch(api('/gateway/neurons/graph?id=' + encodeURIComponent(id)))
       const d = await r.json()
-      if (!r.ok || !d || !d.neuron || !Array.isArray(d.cogs)) throw new Error(d.error || ('HTTP ' + r.status))
-      const hint = box.querySelector('.hint'); if (hint) hint.remove()
-      startGraph(d)
+      if (!r.ok || !d || !d.neuron || !Array.isArray(d.cogs)) throw new Error((d && d.error) || ('HTTP ' + r.status))
+      if (!VIEW || VIEW.id !== id || !sec.isConnected) return
+      if (hint) hint.remove()
+      startGraph(d, sec)
     } catch (e) {
-      const hint = box.querySelector('.hint')
       if (hint) hint.textContent = '图数据加载失败：' + (e.message || e)
     }
   }
-  $('back').addEventListener('click', () => {
-    if (VIEW) { if (VIEW.ro) VIEW.ro.disconnect(); if (VIEW.raf) cancelAnimationFrame(VIEW.raf); VIEW = null }
-    $('view').hidden = true
-    $('picker').hidden = false
-  })
+
+  function openGraph(id) {
+    VIEW = { mode: 'detail', id }
+    renderDetail()
+  }
+  function backToGrid() {
+    if (GRAPH) {
+      if (GRAPH.ro) GRAPH.ro.disconnect()
+      if (GRAPH.raf) cancelAnimationFrame(GRAPH.raf)
+      GRAPH = null
+    }
+    VIEW = null
+    GRID_Q = ''
+    renderGrid()
+    window.scrollTo(0, 0)
+  }
 
   // 半径：mem 小点；cog ∝ 挂载数 + 内容量；社群 ∝ cog 数 + 内容量
   function memR(chars) { return 2.5 + Math.min(2.5, chars / 600) }
@@ -248,19 +300,21 @@
   }
 
   function palette() {
-    const dark = matchMedia('(prefers-color-scheme: dark)').matches
-    return dark
+    return THEME_DARK()
       ? { ringCog: 'rgba(22,22,22,0.9)', ringComm: 'rgba(22,22,22,0.95)', label: 'rgba(208,212,220,0.85)' }
       : { ringCog: 'rgba(255,255,255,0.9)', ringComm: 'rgba(255,255,255,0.95)', label: 'rgba(40,50,70,0.85)' }
   }
   function cogHue(n) { return n.type === 'comm' ? hue(n.ref.i) : n.ref.community >= 0 ? hue(n.ref.community) : '#8a94a6' }
   function hexA(hex, a) { const h = hex.replace('#', ''); return 'rgba(' + parseInt(h.slice(0, 2), 16) + ',' + parseInt(h.slice(2, 4), 16) + ',' + parseInt(h.slice(4, 6), 16) + ',' + a + ')' }
 
-  function startGraph(data) {
-    const canvas = $('canvas'), box = $('graph'), pop = $('pop')
+  function startGraph(data, sec) {
+    const box = sec.querySelector('[data-graph]')
+    if (!box) return
+    box.insertAdjacentHTML('beforeend', '<canvas></canvas><div class="pop" hidden></div>')
+    const canvas = box.querySelector('canvas'), pop = box.querySelector('.pop')
     const model = buildModel(data)
     const st = { model, view: { x: 0, y: 0, k: 1 }, raf: 0, pinned: null, canvas, ctx: canvas.getContext('2d'), box, pop, alpha: 1, drag: null }
-    VIEW = st
+    GRAPH = st
     const resize = () => {
       const w = box.clientWidth, h = box.clientHeight
       if (!w || !h) return
@@ -274,7 +328,7 @@
     resize()
     st.ro = new ResizeObserver(resize); st.ro.observe(box)
     const frame = () => {
-      if (!canvas.isConnected) { if (st.ro) st.ro.disconnect(); if (st.raf) cancelAnimationFrame(st.raf); if (VIEW === st) VIEW = null; return }
+      if (!canvas.isConnected) { if (st.ro) st.ro.disconnect(); if (st.raf) cancelAnimationFrame(st.raf); if (GRAPH === st) GRAPH = null; return }
       if (st.alpha > 0.003) { tick(st.model, st.alpha); st.alpha *= 0.985 }
       draw(st)
       if (st.pinned) positionPop(st)
@@ -422,6 +476,12 @@
       '<div class="prev">' + esc(m.preview || '（无文本）') + '</div>' +
       chips(['内容 ' + fmtChars(m.chars), m.source ? '来源 ' + esc(m.source) : ''])
   }
+
+  // 刷新按钮：#app 常驻委托
+  $('app').addEventListener('click', (e) => {
+    const act = e.target.closest('[data-act]')
+    if (act && act.dataset.act === 'refresh') loadList()
+  })
 
   loadList()
 </script>
